@@ -1,7 +1,7 @@
 <launch>
 
     <arg name="config_path" default = "$(find vins)/../config/black_box/black_box_config.yaml" />
-    <arg name="vins_path" default = "$(find vins)/../config/../" />
+    young/vins_ws<arg name="vins_path" default = "$(find vins)/../" />
 
     <node name="feature_tracker" pkg="vins" type="feature_tracker" output="log" launch-prefix="taskset -c 3">
         <param name="config_file" type="string" value="$(arg config_path)" />
