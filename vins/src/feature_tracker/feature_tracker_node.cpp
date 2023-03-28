@@ -180,16 +180,16 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                     double len = std::min(1.0, 1.0 * trackerData[i].track_cnt[j] / WINDOW_SIZE);
                     cv::circle(tmp_img, trackerData[i].cur_pts[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
                     //draw speed line
-                    
-                    Vector2d tmp_cur_un_pts (trackerData[i].cur_un_pts[j].x, trackerData[i].cur_un_pts[j].y);
-                    Vector2d tmp_pts_velocity (trackerData[i].pts_velocity[j].x, trackerData[i].pts_velocity[j].y);
+
+                    Vector2d tmp_cur_un_pts(trackerData[i].cur_un_pts[j].x, trackerData[i].cur_un_pts[j].y);
+                    Vector2d tmp_pts_velocity(trackerData[i].pts_velocity[j].x, trackerData[i].pts_velocity[j].y);
                     Vector3d tmp_prev_un_pts;
                     tmp_prev_un_pts.head(2) = tmp_cur_un_pts - 0.10 * tmp_pts_velocity;
-                    tmp_prev_un_pts.z() = 1;
+                    tmp_prev_un_pts.z()     = 1;
                     Vector2d tmp_prev_uv;
                     trackerData[i].m_camera->spaceToPlane(tmp_prev_un_pts, tmp_prev_uv);
-                    cv::line(tmp_img, trackerData[i].cur_pts[j], cv::Point2f(tmp_prev_uv.x(), tmp_prev_uv.y()), cv::Scalar(255 , 0, 0), 1 , 8, 0);
-                    
+                    cv::line(tmp_img, trackerData[i].cur_pts[j], cv::Point2f(tmp_prev_uv.x(), tmp_prev_uv.y()), cv::Scalar(255, 0, 0), 1, 8, 0);
+
                     char name[10];
                     sprintf(name, "%d", trackerData[i].ids[j]);
                     cv::putText(tmp_img, name, trackerData[i].cur_pts[j], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
@@ -233,18 +233,25 @@ int main(int argc, char **argv)
         }
     }
 
+    // 配置文件中的image_topic
     ros::Subscriber sub_img = nh.subscribe(IMAGE_TOPIC, 100, img_callback);
 
-    pub_img     = nh.advertise<sensor_msgs::PointCloud>("feature", 1000);
-    pub_match   = nh.advertise<sensor_msgs::Image>("feature_img", 1000);
+    // /feature_tracker/feature 会被 /vins_estimator 订阅
+    // 发布的实例是feature_points，跟踪的特征点，给后端优化用
+    pub_img = nh.advertise<sensor_msgs::PointCloud>("feature", 1000);
+    // 发布的实例是ptr，跟踪的特征点图，给RVIZ用和调试用
+    pub_match = nh.advertise<sensor_msgs::Image>("feature_img", 1000);
+    // /feature_tracker/restart 会被 /vins_estimator 订阅
+    // 发布的实例是restart_flag，重新启动标志位
     pub_restart = nh.advertise<std_msgs::Bool>("restart", 1000);
-    
+
+
+    // 这一块配合img_callback中的SHOW_TRACK使用
     if (SHOW_TRACK)
+    {
         cv::namedWindow("vis", cv::WINDOW_NORMAL);
-    
+    }
+
     ros::spin();
     return 0;
 }
-
-// new points velocity is 0, pub or not?
-// track cnt > 1 pub?

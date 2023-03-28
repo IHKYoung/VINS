@@ -1,6 +1,6 @@
 # 语言: None, Cpp, Java, JavaScript, ObjC, Proto, TableGen, TextProto
 Language: Cpp
-# BasedOnStyle:	LLVM
+BasedOnStyle:	LLVM
 
 # 访问说明符(public、private等)的偏移
 AccessModifierOffset: -4
