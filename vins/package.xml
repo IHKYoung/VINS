@@ -1,20 +1,20 @@
 <?xml version="1.0"?>
-<package format="2">
+<package>
   <name>vins</name>
-  <version>0.0.0</version>
+  <version>0.1.0</version>
   <description>The vins metapackage</description>
 
   <maintainer email="quitezeal@gmail.com">YOUNG</maintainer>
   <license>LGPLv3</license>
 
-  <depend>vins_estimator</depend>
-  <depend>feature_tracker</depend>
-  <depend>pose_graph</depend>
-
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>roscpp</build_depend>
-  <exec_depend>roscpp</exec_depend>
+  <run_depend>roscpp</run_depend>
 
   <export>
+    <node name="vins_estimator" />
+    <node name="feature_tracker" />
+    <node name="pose_graph" />
   </export>
+
 </package>

@@ -38,7 +38,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/include
 )
 
-catkin_metapackage()
+catkin_package()
 
 add_executable(vins_estimator
     src/estimator/estimator_node.cpp
@@ -66,7 +66,6 @@ add_executable(feature_tracker
     )
 target_link_libraries(feature_tracker ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
-
 add_executable(pose_graph
     src/pose_graph/pose_graph_node.cpp
     src/pose_graph/pose_graph.cpp
@@ -83,4 +82,3 @@ add_executable(pose_graph
     ThirdParty/VocabularyBinary.cpp
     )
 target_link_libraries(pose_graph ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES}) 
-
