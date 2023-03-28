@@ -1,7 +1,9 @@
 # :sparkles: Upgrade: VINS-Mono
 > **Upgrade List:**
-> 1. :recycle: Reorganize the project structure: Add include directory.
-> 2. ...
+> 1. :art: Merge vins_estimator, feature_tracker, pose_graph into one ros package, named vins.
+> 2. 
+> 3. ...
+
 
 ## TODO
 1. Some **WARNING** while building.
