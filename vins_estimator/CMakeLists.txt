@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(vins_estimator)
+project(vins)
 
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-std=c++11")
@@ -38,7 +38,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/include
 )
 
-catkin_package()
+catkin_metapackage()
 
 add_executable(vins_estimator
     src/estimator/estimator_node.cpp

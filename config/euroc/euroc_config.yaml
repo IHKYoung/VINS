@@ -3,7 +3,7 @@
 #common parameters
 imu_topic: "/imu0"
 image_topic: "/cam0/image_raw"
-output_path: "/home/shaozu/output/"
+output_path: "/home/young/vins_ws/output/"
 
 #camera calibration 
 model_type: PINHOLE

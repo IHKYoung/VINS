@@ -4,7 +4,7 @@
 > 2. ...
 
 ## TODO
-1. Some ==WARNING== while building.
+1. Some **WARNING** while building.
 
 ******
 
