@@ -5,8 +5,8 @@ int FeatureTracker::n_id = 0;
 bool inBorder(const cv::Point2f &pt)
 {
     const int BORDER_SIZE = 1;
-    int img_x = cvRound(pt.x);
-    int img_y = cvRound(pt.y);
+    int img_x             = cvRound(pt.x);
+    int img_y             = cvRound(pt.y);
     return BORDER_SIZE <= img_x && img_x < COL - BORDER_SIZE && BORDER_SIZE <= img_y && img_y < ROW - BORDER_SIZE;
 }
 
@@ -28,18 +28,16 @@ void reduceVector(vector<int> &v, vector<uchar> status)
     v.resize(j);
 }
 
-
 FeatureTracker::FeatureTracker()
 {
 }
 
 void FeatureTracker::setMask()
 {
-    if(FISHEYE)
+    if (FISHEYE)
         mask = fisheye_mask.clone();
     else
         mask = cv::Mat(ROW, COL, CV_8UC1, cv::Scalar(255));
-    
 
     // prefer to keep features that are tracked for long time
     vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id;
@@ -47,10 +45,9 @@ void FeatureTracker::setMask()
     for (unsigned int i = 0; i < forw_pts.size(); i++)
         cnt_pts_id.push_back(make_pair(track_cnt[i], make_pair(forw_pts[i], ids[i])));
 
-    sort(cnt_pts_id.begin(), cnt_pts_id.end(), [](const pair<int, pair<cv::Point2f, int>> &a, const pair<int, pair<cv::Point2f, int>> &b)
-         {
-            return a.first > b.first;
-         });
+    sort(cnt_pts_id.begin(), cnt_pts_id.end(), [](const pair<int, pair<cv::Point2f, int>> &a, const pair<int, pair<cv::Point2f, int>> &b) {
+        return a.first > b.first;
+    });
 
     forw_pts.clear();
     ids.clear();
@@ -140,7 +137,7 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
         int n_max_cnt = MAX_CNT - static_cast<int>(forw_pts.size());
         if (n_max_cnt > 0)
         {
-            if(mask.empty())
+            if (mask.empty())
                 cout << "mask is empty " << endl;
             if (mask.type() != CV_8UC1)
                 cout << "mask type wrong " << endl;
@@ -157,11 +154,11 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
         addPoints();
         ROS_DEBUG("selectFeature costs: %fms", t_a.toc());
     }
-    prev_img = cur_img;
-    prev_pts = cur_pts;
+    prev_img    = cur_img;
+    prev_pts    = cur_pts;
     prev_un_pts = cur_un_pts;
-    cur_img = forw_img;
-    cur_pts = forw_pts;
+    cur_img     = forw_img;
+    cur_pts     = forw_pts;
     undistortedPoints();
     prev_time = cur_time;
 }
@@ -177,13 +174,13 @@ void FeatureTracker::rejectWithF()
         {
             Eigen::Vector3d tmp_p;
             m_camera->liftProjective(Eigen::Vector2d(cur_pts[i].x, cur_pts[i].y), tmp_p);
-            tmp_p.x() = FOCAL_LENGTH * tmp_p.x() / tmp_p.z() + COL / 2.0;
-            tmp_p.y() = FOCAL_LENGTH * tmp_p.y() / tmp_p.z() + ROW / 2.0;
+            tmp_p.x()     = FOCAL_LENGTH * tmp_p.x() / tmp_p.z() + COL / 2.0;
+            tmp_p.y()     = FOCAL_LENGTH * tmp_p.y() / tmp_p.z() + ROW / 2.0;
             un_cur_pts[i] = cv::Point2f(tmp_p.x(), tmp_p.y());
 
             m_camera->liftProjective(Eigen::Vector2d(forw_pts[i].x, forw_pts[i].y), tmp_p);
-            tmp_p.x() = FOCAL_LENGTH * tmp_p.x() / tmp_p.z() + COL / 2.0;
-            tmp_p.y() = FOCAL_LENGTH * tmp_p.y() / tmp_p.z() + ROW / 2.0;
+            tmp_p.x()      = FOCAL_LENGTH * tmp_p.x() / tmp_p.z() + COL / 2.0;
+            tmp_p.y()      = FOCAL_LENGTH * tmp_p.y() / tmp_p.z() + ROW / 2.0;
             un_forw_pts[i] = cv::Point2f(tmp_p.x(), tmp_p.y());
         }
 
@@ -201,16 +198,19 @@ void FeatureTracker::rejectWithF()
     }
 }
 
+// 更新能够被跟踪到的特征点的id
 bool FeatureTracker::updateID(unsigned int i)
 {
     if (i < ids.size())
     {
-        if (ids[i] == -1)
+        if (ids[i] == -1) {
             ids[i] = n_id++;
+        }
         return true;
     }
-    else
+    else {
         return false;
+    }
 }
 
 void FeatureTracker::readIntrinsicParameter(const string &calib_file)
@@ -219,6 +219,7 @@ void FeatureTracker::readIntrinsicParameter(const string &calib_file)
     m_camera = CameraFactory::instance()->generateCameraFromYamlFile(calib_file);
 }
 
+// 显示去畸变矫正后的特征点
 void FeatureTracker::showUndistortion(const string &name)
 {
     cv::Mat undistortedImg(ROW + 600, COL + 600, CV_8UC1, cv::Scalar(0));
@@ -231,7 +232,9 @@ void FeatureTracker::showUndistortion(const string &name)
             m_camera->liftProjective(a, b);
             distortedp.push_back(a);
             undistortedp.push_back(Eigen::Vector2d(b.x() / b.z(), b.y() / b.z()));
-            //printf("%f,%f->%f,%f,%f\n)\n", a.x(), a.y(), b.x(), b.y(), b.z());
+#if PRINT_DEBUG
+            printf("distorted: (%f,%f) -> undistorted:(%f,%f,%f)\n", a.x(), a.y(), b.x(), b.y(), b.z());
+#endif
         }
     for (int i = 0; i < int(undistortedp.size()); i++)
     {
@@ -239,20 +242,22 @@ void FeatureTracker::showUndistortion(const string &name)
         pp.at<float>(0, 0) = undistortedp[i].x() * FOCAL_LENGTH + COL / 2;
         pp.at<float>(1, 0) = undistortedp[i].y() * FOCAL_LENGTH + ROW / 2;
         pp.at<float>(2, 0) = 1.0;
-        //cout << trackerData[0].K << endl;
-        //printf("%lf %lf\n", p.at<float>(1, 0), p.at<float>(0, 0));
-        //printf("%lf %lf\n", pp.at<float>(1, 0), pp.at<float>(0, 0));
+#if PRINT_DEBUG
+        cout << trackerData[0].K << endl;
+        printf("p: (%lf,%lf)\n", p.at<float>(1, 0), p.at<float>(0, 0));
+        printf("pp: (%lf,%lf)\n", pp.at<float>(1, 0), pp.at<float>(0, 0));
+#endif
         if (pp.at<float>(1, 0) + 300 >= 0 && pp.at<float>(1, 0) + 300 < ROW + 600 && pp.at<float>(0, 0) + 300 >= 0 && pp.at<float>(0, 0) + 300 < COL + 600)
         {
             undistortedImg.at<uchar>(pp.at<float>(1, 0) + 300, pp.at<float>(0, 0) + 300) = cur_img.at<uchar>(distortedp[i].y(), distortedp[i].x());
         }
         else
         {
-            //ROS_ERROR("(%f %f) -> (%f %f)", distortedp[i].y, distortedp[i].x, pp.at<float>(1, 0), pp.at<float>(0, 0));
+            ROS_ERROR("(%lf,%lf) -> (%lf,%lf)", distortedp[i].y(), distortedp[i].x(), pp.at<float>(1, 0), pp.at<float>(0, 0));
         }
     }
     cv::imshow(name, undistortedImg);
-    cv::waitKey(0);
+    // cv::waitKey(0);
 }
 
 void FeatureTracker::undistortedPoints()

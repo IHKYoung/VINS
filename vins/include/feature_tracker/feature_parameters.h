@@ -17,10 +17,11 @@ extern int MIN_DIST;
 extern int WINDOW_SIZE;
 extern int FREQ;
 extern int SHOW_TRACK;
-extern int STEREO_TRACK;
+extern int SHOW_UNDISTORTION;
 extern int EQUALIZE;
 extern int FISHEYE;
 extern bool PUB_THIS_FRAME;
+extern bool STEREO_TRACK;
 extern double F_THRESHOLD;
 
 void readParameters(ros::NodeHandle &n);
