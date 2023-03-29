@@ -2,7 +2,7 @@
     <arg name="config_path" default = "$(find vins)/../config/euroc/euroc_config.yaml" />
 	  young/vins_ws<arg name="vins_path" default = "$(find vins)/../" />
     
-    <node name="feature_tracker" pkg="vins" type="feature_tracker" output="log">
+    <node name="feature_tracker" pkg="vins" type="feature_tracker" output="screen">
         <param name="config_file" type="string" value="$(arg config_path)" />
         <param name="vins_folder" type="string" value="$(arg vins_path)" />
     </node>

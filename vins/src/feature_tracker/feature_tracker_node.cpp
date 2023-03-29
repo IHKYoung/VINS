@@ -66,7 +66,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     }
 
     cv_bridge::CvImageConstPtr ptr;
-    // 判断图像的编码格式，如果是bgr8，则转换为MONO8，否则直接转换为MONO8
+    // 判断图像的编码格式，如果是bgr8，则转换为MONO8
     if (img_msg->encoding == "bgr8")
     {
         // MONO8可以保存一些图像的元数据，比如图像的时间戳、图像的宽高等
@@ -78,6 +78,19 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         img.step         = img_msg->step;         // 图像数据的每一行所占用的字节数，即每一行像素数据的内存偏移量
         img.data         = img_msg->data;         // 指向图像数据的指针， 可以通过对data + i * step + j的访问来访问第i行第j列的像素数据
         img.encoding     = "bgr8";
+        ptr              = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
+    }
+    else if (img_msg->encoding == "mono8")
+    {
+        // MONO8可以保存一些图像的元数据，比如图像的时间戳、图像的宽高等
+        sensor_msgs::Image img;
+        img.header       = img_msg->header;
+        img.height       = img_msg->height;
+        img.width        = img_msg->width;
+        img.is_bigendian = img_msg->is_bigendian; // 是否为大端模式，大端序中，高位字节排在低位字节的前面，十六进制数0x12345678在大端序中的存储方式为12 34 56 78（内存地址增大方向）
+        img.step         = img_msg->step;         // 图像数据的每一行所占用的字节数，即每一行像素数据的内存偏移量
+        img.data         = img_msg->data;         // 指向图像数据的指针， 可以通过对data + i * step + j的访问来访问第i行第j列的像素数据
+        img.encoding     = "mono8";
         ptr              = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
     }
     else
@@ -95,6 +108,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         // 这里的STEREO_TRACK是用来特征点匹配可视化
         if (i != 1 || !STEREO_TRACK)
         {
+            // 这里的ROW就是图像的高度：image_height
             trackerData[i].readImage(ptr->image.rowRange(ROW * i, ROW * (i + 1)), img_msg->header.stamp.toSec());
         }
         else
@@ -119,7 +133,8 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         }
     }
 
-    for (unsigned int i = 0; ; i++)
+    // 源码这里没有加花括号，但是我觉得加上花括号更好；并且源码没有加花括号，很容易导致后面的代码被误认为是for循环的一部分
+    for (unsigned int i = 0;; i++)
     {
         bool completed = false;
         for (int j = 0; j < NUM_OF_CAM; j++)
@@ -129,10 +144,10 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                 // 通过或操作来判断是否完成特征点ID的更新
                 completed |= trackerData[j].updateID(i);
             }
-            if (!completed)
-            {
-                break;
-            }
+        }
+        if (!completed)
+        {
+            break;
         }
     }
 
@@ -185,6 +200,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         feature_points->channels.push_back(velocity_x_of_point);
         feature_points->channels.push_back(velocity_y_of_point);
         ROS_DEBUG("publish %f, at %f", feature_points->header.stamp.toSec(), ros::Time::now().toSec());
+
         // skip the first image; since no optical speed on frist image
         if (!init_pub)
         {
@@ -199,34 +215,40 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         {
             // 这里变成bgr8是为了显示点的不同颜色
             ptr = cv_bridge::cvtColor(ptr, sensor_msgs::image_encodings::BGR8);
-            // cv::Mat stereo_img(ROW * NUM_OF_CAM, COL, CV_8UC3);
-            cv::Mat stereo_img = ptr->image;
+            // 这里考虑了双目的情况，但实际上只有单目的情况
+            cv::Mat stereo_img(ROW * NUM_OF_CAM, COL, CV_8UC3);
+            stereo_img = ptr->image;
 
             for (int i = 0; i < NUM_OF_CAM; i++)
             {
+                // 这里的ROW就是图像的高度：image_height
+                // 这里相当于tmp_img拿到了stereo_img的第i行的指针
+                // 这样的考虑应该就是因为左右图不同的原因
                 cv::Mat tmp_img = stereo_img.rowRange(i * ROW, (i + 1) * ROW);
-                cv::cvtColor(show_img, tmp_img, CV_GRAY2RGB);
-                // 显示追踪状态：红色Good
                 for (unsigned int j = 0; j < trackerData[i].cur_pts.size(); j++)
                 {
                     double len = std::min(1.0, 1.0 * trackerData[i].track_cnt[j] / WINDOW_SIZE);
+                    // 显示追踪状态：红色多表示Good（len的值大），BGR颜色空间
                     cv::circle(tmp_img, trackerData[i].cur_pts[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
                     // 绘制特征点的运动轨迹
-                    Vector2d tmp_cur_un_pts(trackerData[i].cur_un_pts[j].x, trackerData[i].cur_un_pts[j].y);
-                    Vector2d tmp_pts_velocity(trackerData[i].pts_velocity[j].x, trackerData[i].pts_velocity[j].y);
-                    Vector3d tmp_prev_un_pts;
+                    Vector2d tmp_cur_un_pts(trackerData[i].cur_un_pts[j].x, trackerData[i].cur_un_pts[j].y); // 归一化平面的坐标
+                    Vector2d tmp_pts_velocity(trackerData[i].pts_velocity[j].x, trackerData[i].pts_velocity[j].y); // 特征点的像素速度
+                    Vector3d tmp_prev_un_pts; // 用于存储特征点的上一帧的归一化平面坐标(x,y,1)
+                    Vector2d tmp_prev_uv; // 用于存储特征点的上一帧的像素坐标
                     tmp_prev_un_pts.head(2) = tmp_cur_un_pts - 0.10 * tmp_pts_velocity;
                     tmp_prev_un_pts.z()     = 1;
-                    Vector2d tmp_prev_uv;
                     trackerData[i].m_camera->spaceToPlane(tmp_prev_un_pts, tmp_prev_uv);
+                    // BGR 蓝色的线条
                     cv::line(tmp_img, trackerData[i].cur_pts[j], cv::Point2f(tmp_prev_uv.x(), tmp_prev_uv.y()), cv::Scalar(255, 0, 0), 1, 8, 0);
-
+                    // 同时打印特征点的全局ID
                     char name[10];
                     sprintf(name, "%d", trackerData[i].ids[j]);
                     cv::putText(tmp_img, name, trackerData[i].cur_pts[j], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
                 }
             }
-            cv::imshow("vis", stereo_img);
+            // 同理，指针的作用，所以对tmp_img的操作会同步到stereo_img
+            cv::imshow("feature tracker", stereo_img);
+            // 只能有一个waitKey，否则会卡死
             cv::waitKey(1);
             pub_match.publish(ptr->toImageMsg());
         }

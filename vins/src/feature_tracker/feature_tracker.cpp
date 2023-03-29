@@ -2,23 +2,33 @@
 
 int FeatureTracker::n_id = 0;
 
+// 判断跟踪的特征点是否在图像边界内
 bool inBorder(const cv::Point2f &pt)
 {
     const int BORDER_SIZE = 1;
-    int img_x             = cvRound(pt.x);
-    int img_y             = cvRound(pt.y);
+    // cvRound(): 返回跟参数最接近的整数值，即四舍五入；
+    int img_x = cvRound(pt.x);
+    int img_y = cvRound(pt.y);
+    // 这里将边界设定为1个像素，即在边界上的特征点也会认为是在图像外的
     return BORDER_SIZE <= img_x && img_x < COL - BORDER_SIZE && BORDER_SIZE <= img_y && img_y < ROW - BORDER_SIZE;
 }
 
+// 去除无法跟踪的特征点
 void reduceVector(vector<cv::Point2f> &v, vector<uchar> status)
 {
     int j = 0;
     for (int i = 0; i < int(v.size()); i++)
+    {
+        // 根据status的值，收缩vector的大小
         if (status[i])
+        {
             v[j++] = v[i];
+        }
+    }
     v.resize(j);
 }
 
+// 相当于重载，处理的是int类型的vector
 void reduceVector(vector<int> &v, vector<uchar> status)
 {
     int j = 0;
@@ -32,34 +42,54 @@ FeatureTracker::FeatureTracker()
 {
 }
 
+/**
+ * @brief 对特征点进行均匀化处理
+ * @details 对跟踪到的特征点，按照被追踪到的次数cnt排序并依次选点
+ *          同时使用mask进行类似非极大抑制的操作，mask的半径通过配置文件的min_dist设置
+ * @return void 
+ */
 void FeatureTracker::setMask()
 {
+    // 根据配置选择是否使用鱼眼来做蒙板
     if (FISHEYE)
+    {
         mask = fisheye_mask.clone();
+    }
     else
+    {
         mask = cv::Mat(ROW, COL, CV_8UC1, cv::Scalar(255));
+    }
 
     // prefer to keep features that are tracked for long time
+    // 构造(cnt, (pts, id))序列，下面需要使用make_pair()函数
     vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id;
 
     for (unsigned int i = 0; i < forw_pts.size(); i++)
+    {
         cnt_pts_id.push_back(make_pair(track_cnt[i], make_pair(forw_pts[i], ids[i])));
-
+    }
+    // 对光流跟踪到的特征点forw_pts，按照被跟踪到的次数cnt从大到小排序（lambda表达式）
     sort(cnt_pts_id.begin(), cnt_pts_id.end(), [](const pair<int, pair<cv::Point2f, int>> &a, const pair<int, pair<cv::Point2f, int>> &b) {
         return a.first > b.first;
     });
 
+    // 此时清空，表示已经不需要这部分的历史记录了
     forw_pts.clear();
     ids.clear();
     track_cnt.clear();
 
+    // 这里是先做了排序处理，按照被跟踪到的次数cnt从大到小排序（类似于非极大抑制）
     for (auto &it : cnt_pts_id)
     {
+        // 这里的操作逻辑是，未作处理的mask中，特征点对应的值就是255
         if (mask.at<uchar>(it.second.first) == 255)
         {
+            // 这里是pair<int, pair<cv::Point2f, int>>的结构
             forw_pts.push_back(it.second.first);
             ids.push_back(it.second.second);
             track_cnt.push_back(it.first);
+            // 圆形mask，配置文件中通过min_dist设置半径
+            // 这里是选取了一个特征点之后，将这个点周围的区域都设置为0，即不再选取这个区域内的特征点
             cv::circle(mask, it.second.first, MIN_DIST, 0, -1);
         }
     }
@@ -203,12 +233,14 @@ bool FeatureTracker::updateID(unsigned int i)
 {
     if (i < ids.size())
     {
-        if (ids[i] == -1) {
+        if (ids[i] == -1)
+        {
             ids[i] = n_id++;
         }
         return true;
     }
-    else {
+    else
+    {
         return false;
     }
 }
@@ -257,6 +289,7 @@ void FeatureTracker::showUndistortion(const string &name)
         }
     }
     cv::imshow(name, undistortedImg);
+    // 只能有一个waitKey，否则会出现卡死的情况
     // cv::waitKey(0);
 }
 
