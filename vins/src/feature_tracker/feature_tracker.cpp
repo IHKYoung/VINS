@@ -95,115 +95,345 @@ void FeatureTracker::setMask()
     }
 }
 
+// 添将新检测到的特征点n_pts
 void FeatureTracker::addPoints()
 {
     for (auto &p : n_pts)
     {
         forw_pts.push_back(p);
-        ids.push_back(-1);
-        track_cnt.push_back(1);
+        ids.push_back(-1);      // 新提取的特征点id初始化为-1
+        track_cnt.push_back(1); // 新提取的特征点被跟踪的次数初始化为1
     }
 }
 
+/**
+ * @brief 使用光流法进行特征点跟踪
+ * 
+ * @details createCLAHE() 对图像进行自适应直方图均衡化
+ *          calcOpticalFlowPyrLK() LK金字塔光流法
+ *          setMask() 对跟踪点进行排序，设置mask
+ *          rejectWithF() 通过基本矩阵剔除outliers
+ *          goodFeaturesToTrack() 添加特征点(shi-tomasi角点)，确保每帧都有足够的特征点
+ *          addPoints() 添加新检测到的特征点
+ *          undistortedPoints() 对角点图像坐标去畸变矫正，并计算每个角点的速度            
+ * 
+ * @param _img 图像
+ * @param _cur_time 图像时间戳
+ */
 void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
 {
     cv::Mat img;
-    TicToc t_r;
     cur_time = _cur_time;
 
+    // 是否执行行直方图均衡化处理（处理过亮或过暗的图像）
     if (EQUALIZE)
     {
         cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
-        TicToc t_c;
+        TicToc t_clahe;
         clahe->apply(_img, img);
-        ROS_DEBUG("CLAHE costs: %fms", t_c.toc());
+        ROS_DEBUG("[FeatureTracker] CLAHE costs: %fms", t_clahe.toc());
     }
     else
+    {
         img = _img;
+    }
 
     if (forw_img.empty())
     {
+        // 如果当前帧的图像数据forw_img为空，说明当前是第一次读入图像数据
+        // 因此forw_img、prev_img、cur_img都是img
         prev_img = cur_img = forw_img = img;
     }
     else
     {
+        // 之前已经有图像读入，只需要更新当前帧forw_img的数据
         forw_img = img;
     }
 
+    // 此时forw_pts保存的是上一帧图像中的特征点，需要清除
     forw_pts.clear();
 
     if (cur_pts.size() > 0)
     {
-        TicToc t_o;
+        TicToc t_lk;
         vector<uchar> status;
         vector<float> err;
+        // 调用cv::calcOpticalFlowPyrLK()对前一帧的特征点cur_pts进行LK金字塔光流跟踪，得到后一帧的特征点forw_pts
+        // status标记了从前一帧cur_img到forw_img特征点的跟踪状态，无法被追踪到的点标记为0，通过status的标记进行外点去除处理
         cv::calcOpticalFlowPyrLK(cur_img, forw_img, cur_pts, forw_pts, status, err, cv::Size(21, 21), 3);
 
+        // 将位于图像边界外的点标记为0，调用了inBorder()函数
         for (int i = 0; i < int(forw_pts.size()); i++)
+        {
             if (status[i] && !inBorder(forw_pts[i]))
+            {
                 status[i] = 0;
+            }
+        }
+        // 根据status，把跟踪失败的点剔除，不仅要从forw_pts中剔除，而且还要从cur_pts、prev_pts 和 cur_un_pts中剔除
+        // 其中prev_pts和cur_pts中的特征点是一一对应的
+        // 记录特征点id的ids，和记录特征点被跟踪次数的track_cnt也要剔除
         reduceVector(prev_pts, status);
         reduceVector(cur_pts, status);
         reduceVector(forw_pts, status);
         reduceVector(ids, status);
         reduceVector(cur_un_pts, status);
         reduceVector(track_cnt, status);
-        ROS_DEBUG("temporal optical flow costs: %fms", t_o.toc());
+        ROS_DEBUG("[FeatureTracker] OpticalFlow LK costs: %fms", t_lk.toc());
     }
 
+    // 光流追踪成功，特征点被成功跟踪的次数就加1，数值代表被追踪的次数，数值越大，说明被追踪的就越久
     for (auto &n : track_cnt)
+    {
         n++;
+    }
 
+    // PUB_THIS_FRAME=1，表示需要发布特征点，由发布频率控制
     if (PUB_THIS_FRAME)
     {
         rejectWithF();
-        ROS_DEBUG("set mask begins");
-        TicToc t_m;
+        ROS_DEBUG("[FeatureTracker] Set mask begins");
+        TicToc t_mask;
         setMask();
-        ROS_DEBUG("set mask costs %fms", t_m.toc());
+        ROS_DEBUG("[FeatureTracker] Set mask costs %fms", t_mask.toc());
 
-        ROS_DEBUG("detect feature begins");
-        TicToc t_t;
+        ROS_DEBUG("[FeatureTracker] Detect Feature begins");
+        TicToc t_detect;
         int n_max_cnt = MAX_CNT - static_cast<int>(forw_pts.size());
         if (n_max_cnt > 0)
         {
             if (mask.empty())
-                cout << "mask is empty " << endl;
+            {
+                cout << "[FeatureTracker] Mask is empty " << endl;
+            }
             if (mask.type() != CV_8UC1)
-                cout << "mask type wrong " << endl;
+            {
+                cout << "[FeatureTracker] Mask type wrong " << endl;
+            }
             if (mask.size() != forw_img.size())
-                cout << "wrong size " << endl;
+            {
+                cout << "[FeatureTracker] Wrong size " << endl;
+            }
+            /**
+             * @brief 在mask中不为0的区域检测新的特征点（这里使用的shi-tomasi算法）
+             * void cv::goodFeaturesToTrack(                   
+             *     InputArray      image,                      输入图像
+             *     OutputArray     corners,                    存放检测到的角点的vector
+             *     int             maxCorners,                 返回的角点的数量的最大值
+             *     double          qualityLevel,               角点质量水平的最低阈值（范围为0到1，质量最高角点的水平为1），小于该阈值的角点被拒绝
+             *     double          minDistance,                返回角点之间欧式距离的最小值（由配置中的min_dist确定）
+             *     InputArray      mask = noArray(),           和输入图像具有相同大小，类型必须为CV_8UC1，用来描述图像中感兴趣的区域，只在感兴趣区域中检测角点
+             *     int             blockSize = 3,              计算协方差矩阵时的窗口大小
+             *     bool            useHarrisDetector = false,  指示是否使用Harris角点检测，如不指定则使用shi-tomasi算法
+             *     double          k = 0.04                    Harris角点检测需要的k值
+             * 
+             */
+            // TODO 可以考虑使用Harris角点检测
             cv::goodFeaturesToTrack(forw_img, n_pts, MAX_CNT - forw_pts.size(), 0.01, MIN_DIST, mask);
         }
         else
+        {
             n_pts.clear();
-        ROS_DEBUG("detect feature costs: %fms", t_t.toc());
+        }
+        ROS_DEBUG("[FeatureTracker] Detect Feature costs: %fms", t_detect.toc());
 
-        ROS_DEBUG("add feature begins");
-        TicToc t_a;
+        ROS_DEBUG("[FeatureTracker] Add Feature begins");
+        TicToc t_add;
+        // 添将新检测到的特征点n_pts添加到forw_pts中，id初始化-1，track_cnt初始化为1
         addPoints();
-        ROS_DEBUG("selectFeature costs: %fms", t_a.toc());
+        ROS_DEBUG("[FeatureTracker] Add Feature costs: %fms", t_add.toc());
     }
+    // 当下一帧图像到来时，当前帧数据就成为了上一帧发布的数据
     prev_img    = cur_img;
     prev_pts    = cur_pts;
     prev_un_pts = cur_un_pts;
-    cur_img     = forw_img;
-    cur_pts     = forw_pts;
+    // 把下一帧的数据forw_img、forw_pts赋给当前帧cur_img、cur_pts
+    cur_img = forw_img;
+    cur_pts = forw_pts;
+    // 根据不同的相机模型去畸变矫正和转换到归一化坐标系上，计算速度
     undistortedPoints();
     prev_time = cur_time;
 }
 
+/**
+ * @brief 使用光流法进行特征点跟踪
+ * ADD: 添加深度图像处理部分
+ * 
+ * @details createCLAHE() 对图像进行自适应直方图均衡化
+ *          calcOpticalFlowPyrLK() LK金字塔光流法
+ *          setMask() 对跟踪点进行排序，设置mask
+ *          rejectWithF() 通过基本矩阵剔除outliers
+ *          goodFeaturesToTrack() 添加特征点(shi-tomasi角点)，确保每帧都有足够的特征点
+ *          addPoints() 添加新检测到的特征点
+ *          undistortedPoints() 对角点图像坐标去畸变矫正，并计算每个角点的速度            
+ * 
+ * @param _img 图像
+ * @param _depth 深度图像
+ * @param _cur_time 图像时间戳
+ */
+void FeatureTracker::readImage(const cv::Mat &_img, const cv::Mat &_depth, double _cur_time)
+{
+    cv::Mat img;
+    cv::Mat depth = _depth;
+    cur_time = _cur_time;
+
+    // 是否执行行直方图均衡化处理（处理过亮或过暗的图像）
+    if (EQUALIZE)
+    {
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
+        TicToc t_clahe;
+        clahe->apply(_img, img);
+        ROS_DEBUG("[FeatureTracker] CLAHE costs: %fms", t_clahe.toc());
+    }
+    else
+    {
+        img = _img;
+    }
+
+    if (forw_img.empty())
+    {
+        // 如果当前帧的图像数据forw_img为空，说明当前是第一次读入图像数据
+        // 因此forw_img、prev_img、cur_img都是img
+        prev_img = cur_img = forw_img = img;
+        // 同样的操作应用在深度图上
+        prev_depth = cur_depth = forw_depth = depth;
+    }
+    else
+    {
+        // 之前已经有图像读入，只需要更新当前帧forw_img的数据
+        forw_img = img;
+        // 同样的操作应用在深度图上
+        forw_depth = depth;
+    }
+
+    // 此时forw_pts保存的是上一帧图像中的特征点，需要清除
+    forw_pts.clear();
+
+    if (cur_pts.size() > 0)
+    {
+        TicToc t_lk;
+        vector<uchar> status;
+        vector<float> err;
+        // 调用cv::calcOpticalFlowPyrLK()对前一帧的特征点cur_pts进行LK金字塔光流跟踪，得到后一帧的特征点forw_pts
+        // status标记了从前一帧cur_img到forw_img特征点的跟踪状态，无法被追踪到的点标记为0，通过status的标记进行外点去除处理
+        cv::calcOpticalFlowPyrLK(cur_img, forw_img, cur_pts, forw_pts, status, err, cv::Size(21, 21), 3);
+
+        // 将位于图像边界外的点标记为0，调用了inBorder()函数
+        for (int i = 0; i < int(forw_pts.size()); i++)
+        {
+            if (status[i] && !inBorder(forw_pts[i]))
+            {
+                status[i] = 0;
+            }
+        }
+        // 根据status，把跟踪失败的点剔除，不仅要从forw_pts中剔除，而且还要从cur_pts、prev_pts 和 cur_un_pts中剔除
+        // 其中prev_pts和cur_pts中的特征点是一一对应的
+        // 记录特征点id的ids，和记录特征点被跟踪次数的track_cnt也要剔除
+        reduceVector(prev_pts, status);
+        reduceVector(cur_pts, status);
+        reduceVector(forw_pts, status);
+        reduceVector(ids, status);
+        reduceVector(cur_un_pts, status);
+        reduceVector(track_cnt, status);
+        ROS_DEBUG("[FeatureTracker] OpticalFlow LK costs: %fms", t_lk.toc());
+    }
+
+    // 光流追踪成功，特征点被成功跟踪的次数就加1，数值代表被追踪的次数，数值越大，说明被追踪的就越久
+    for (auto &n : track_cnt)
+    {
+        n++;
+    }
+
+    // PUB_THIS_FRAME=1，表示需要发布特征点，由发布频率控制
+    if (PUB_THIS_FRAME)
+    {
+        rejectWithF();
+        ROS_DEBUG("[FeatureTracker] Set mask begins");
+        TicToc t_mask;
+        setMask();
+        ROS_DEBUG("[FeatureTracker] Set mask costs %fms", t_mask.toc());
+
+        ROS_DEBUG("[FeatureTracker] Detect Feature begins");
+        TicToc t_detect;
+        int n_max_cnt = MAX_CNT - static_cast<int>(forw_pts.size());
+        if (n_max_cnt > 0)
+        {
+            if (mask.empty())
+            {
+                cout << "[FeatureTracker] Mask is empty " << endl;
+            }
+            if (mask.type() != CV_8UC1)
+            {
+                cout << "[FeatureTracker] Mask type wrong " << endl;
+            }
+            if (mask.size() != forw_img.size())
+            {
+                cout << "[FeatureTracker] Wrong size " << endl;
+            }
+            /**
+             * @brief 在mask中不为0的区域检测新的特征点（这里使用的shi-tomasi算法）
+             * void cv::goodFeaturesToTrack(                   
+             *     InputArray      image,                      输入图像
+             *     OutputArray     corners,                    存放检测到的角点的vector
+             *     int             maxCorners,                 返回的角点的数量的最大值
+             *     double          qualityLevel,               角点质量水平的最低阈值（范围为0到1，质量最高角点的水平为1），小于该阈值的角点被拒绝
+             *     double          minDistance,                返回角点之间欧式距离的最小值（由配置中的min_dist确定）
+             *     InputArray      mask = noArray(),           和输入图像具有相同大小，类型必须为CV_8UC1，用来描述图像中感兴趣的区域，只在感兴趣区域中检测角点
+             *     int             blockSize = 3,              计算协方差矩阵时的窗口大小
+             *     bool            useHarrisDetector = false,  指示是否使用Harris角点检测，如不指定则使用shi-tomasi算法
+             *     double          k = 0.04                    Harris角点检测需要的k值
+             * 
+             */
+            // TODO 可以考虑使用Harris角点检测
+            cv::goodFeaturesToTrack(forw_img, n_pts, MAX_CNT - forw_pts.size(), 0.01, MIN_DIST, mask);
+        }
+        else
+        {
+            n_pts.clear();
+        }
+        ROS_DEBUG("[FeatureTracker] Detect Feature costs: %fms", t_detect.toc());
+
+        ROS_DEBUG("[FeatureTracker] Add Feature begins");
+        TicToc t_add;
+        // 添将新检测到的特征点n_pts添加到forw_pts中，id初始化-1，track_cnt初始化为1
+        addPoints();
+        ROS_DEBUG("[FeatureTracker] Add Feature costs: %fms", t_add.toc());
+    }
+    // 当下一帧图像到来时，当前帧数据就成为了上一帧发布的数据
+    prev_img    = cur_img;
+    prev_pts    = cur_pts;
+    prev_un_pts = cur_un_pts;
+    // 把下一帧的数据forw_img、forw_pts赋给当前帧cur_img、cur_pts
+    cur_img = forw_img;
+    cur_pts = forw_pts;
+    // 同样的操作应用在深度图上
+    prev_depth = cur_depth;
+    cur_depth  = forw_depth;
+    // 根据不同的相机模型去畸变矫正和转换到归一化坐标系上，计算速度
+    undistortedPoints();
+    prev_time = cur_time;
+}
+
+/**
+ * @brief 通过F矩阵去除outliers
+ * @details 将图像坐标转换为归一化坐标
+ *          cv::findFundamentalMat()计算F矩阵
+ *          reduceVector()去除outliers 
+ */
 void FeatureTracker::rejectWithF()
 {
     if (forw_pts.size() >= 8)
     {
-        ROS_DEBUG("FM ransac begins");
-        TicToc t_f;
+        ROS_DEBUG("[FeatureTracker] FundamentalMat RANSAC begins");
+        TicToc t_fundamental;
         vector<cv::Point2f> un_cur_pts(cur_pts.size()), un_forw_pts(forw_pts.size());
         for (unsigned int i = 0; i < cur_pts.size(); i++)
         {
             Eigen::Vector3d tmp_p;
+            // 根据不同的相机模型将二维坐标转换到三维坐标
             m_camera->liftProjective(Eigen::Vector2d(cur_pts[i].x, cur_pts[i].y), tmp_p);
+            // 将图像坐标转换为归一化坐标
+            // F * x / z + cx = x'
             tmp_p.x()     = FOCAL_LENGTH * tmp_p.x() / tmp_p.z() + COL / 2.0;
             tmp_p.y()     = FOCAL_LENGTH * tmp_p.y() / tmp_p.z() + ROW / 2.0;
             un_cur_pts[i] = cv::Point2f(tmp_p.x(), tmp_p.y());
@@ -215,16 +445,18 @@ void FeatureTracker::rejectWithF()
         }
 
         vector<uchar> status;
+        // 调用cv::findFundamentalMat对un_cur_pts和un_forw_pts计算F矩阵
         cv::findFundamentalMat(un_cur_pts, un_forw_pts, cv::FM_RANSAC, F_THRESHOLD, 0.99, status);
         int size_a = cur_pts.size();
+        // 根据status去除outliers
         reduceVector(prev_pts, status);
         reduceVector(cur_pts, status);
         reduceVector(forw_pts, status);
         reduceVector(cur_un_pts, status);
         reduceVector(ids, status);
         reduceVector(track_cnt, status);
-        ROS_DEBUG("FM ransac: %d -> %lu: %f", size_a, forw_pts.size(), 1.0 * forw_pts.size() / size_a);
-        ROS_DEBUG("FM ransac costs: %fms", t_f.toc());
+        ROS_DEBUG("[FeatureTracker] FundamentalMat RANSAC(rate): %d -> %lu: %f", size_a, forw_pts.size(), 1.0 * forw_pts.size() / size_a);
+        ROS_DEBUG("[FeatureTracker] FundamentalMat RANSAC costs: %fms", t_fundamental.toc());
     }
 }
 
@@ -245,9 +477,10 @@ bool FeatureTracker::updateID(unsigned int i)
     }
 }
 
+// 读取相机内参
 void FeatureTracker::readIntrinsicParameter(const string &calib_file)
 {
-    ROS_INFO("reading paramerter of camera %s", calib_file.c_str());
+    ROS_INFO("[FeatureTracker] Reading Intrinsic Parameter of camera %s", calib_file.c_str());
     m_camera = CameraFactory::instance()->generateCameraFromYamlFile(calib_file);
 }
 
@@ -265,7 +498,7 @@ void FeatureTracker::showUndistortion(const string &name)
             distortedp.push_back(a);
             undistortedp.push_back(Eigen::Vector2d(b.x() / b.z(), b.y() / b.z()));
 #if PRINT_DEBUG
-            printf("distorted: (%f,%f) -> undistorted:(%f,%f,%f)\n", a.x(), a.y(), b.x(), b.y(), b.z());
+            printf("[FeatureTracker] distorted: (%f,%f) -> undistorted:(%f,%f,%f)\n", a.x(), a.y(), b.x(), b.y(), b.z());
 #endif
         }
     for (int i = 0; i < int(undistortedp.size()); i++)
@@ -276,8 +509,8 @@ void FeatureTracker::showUndistortion(const string &name)
         pp.at<float>(2, 0) = 1.0;
 #if PRINT_DEBUG
         cout << trackerData[0].K << endl;
-        printf("p: (%lf,%lf)\n", p.at<float>(1, 0), p.at<float>(0, 0));
-        printf("pp: (%lf,%lf)\n", pp.at<float>(1, 0), pp.at<float>(0, 0));
+        printf("[FeatureTracker] p: (%lf,%lf)\n", p.at<float>(1, 0), p.at<float>(0, 0));
+        printf("[FeatureTracker] pp: (%lf,%lf)\n", pp.at<float>(1, 0), pp.at<float>(0, 0));
 #endif
         if (pp.at<float>(1, 0) + 300 >= 0 && pp.at<float>(1, 0) + 300 < ROW + 600 && pp.at<float>(0, 0) + 300 >= 0 && pp.at<float>(0, 0) + 300 < COL + 600)
         {
@@ -290,24 +523,30 @@ void FeatureTracker::showUndistortion(const string &name)
     }
     cv::imshow(name, undistortedImg);
     // 只能有一个waitKey，否则会出现卡死的情况
-    // cv::waitKey(0);
+    cv::waitKey(1); // 0表示无限等待
 }
 
+// 对角点图像坐标进行去畸变矫正，转换到归一化坐标系上，并计算每个角点的速度
 void FeatureTracker::undistortedPoints()
 {
     cur_un_pts.clear();
     cur_un_pts_map.clear();
-    //cv::undistortPoints(cur_pts, un_pts, K, cv::Mat());
+    // 可以使用cv::undistortPoints对角点图像坐标进行去畸变矫正 cv::undistortPoints(cur_pts, un_pts, K, cv::Mat());
     for (unsigned int i = 0; i < cur_pts.size(); i++)
     {
         Eigen::Vector2d a(cur_pts[i].x, cur_pts[i].y);
         Eigen::Vector3d b;
+        // 根据不同的相机模型将二维坐标转换到三维坐标
         m_camera->liftProjective(a, b);
+        // 特征点在相机坐标系的归一化坐标
         cur_un_pts.push_back(cv::Point2f(b.x() / b.z(), b.y() / b.z()));
         cur_un_pts_map.insert(make_pair(ids[i], cv::Point2f(b.x() / b.z(), b.y() / b.z())));
-        //printf("cur pts id %d %f %f", ids[i], cur_un_pts[i].x, cur_un_pts[i].y);
+#if PRINT_DEBUG
+        printf("[FeatureTracker] cur_pts: id %d -- (%f,%f)", ids[i], cur_un_pts[i].x, cur_un_pts[i].y);
+#endif
     }
     // caculate points velocity
+    // 计算每个特征点的速度
     if (!prev_un_pts_map.empty())
     {
         double dt = cur_time - prev_time;
@@ -325,7 +564,9 @@ void FeatureTracker::undistortedPoints()
                     pts_velocity.push_back(cv::Point2f(v_x, v_y));
                 }
                 else
+                {
                     pts_velocity.push_back(cv::Point2f(0, 0));
+                }
             }
             else
             {

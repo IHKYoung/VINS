@@ -3,6 +3,7 @@
 #include <opencv2/highgui/highgui.hpp>
 
 extern std::string IMAGE_TOPIC;
+extern std::string DEPTH_TOPIC;
 extern std::string IMU_TOPIC;
 extern std::string FISHEYE_MASK;
 extern std::vector<std::string> CAM_NAMES;

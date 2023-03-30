@@ -1,6 +1,7 @@
 #include "feature_tracker/feature_parameters.h"
 
 std::string IMAGE_TOPIC;
+std::string DEPTH_TOPIC;
 std::string IMU_TOPIC;
 std::vector<std::string> CAM_NAMES;
 std::string FISHEYE_MASK;
@@ -47,6 +48,7 @@ void readParameters(ros::NodeHandle &n)
     std::string VINS_FOLDER_PATH = readParam<std::string>(n, "vins_folder");
 
     fsSettings["image_topic"] >> IMAGE_TOPIC;
+    fsSettings["depth_topic"] >> DEPTH_TOPIC; // 增加深度图话题
     fsSettings["imu_topic"] >> IMU_TOPIC;
     MAX_CNT           = fsSettings["max_cnt"];
     MIN_DIST          = fsSettings["min_dist"];
@@ -65,7 +67,7 @@ void readParameters(ros::NodeHandle &n)
 
     WINDOW_SIZE    = 20;
     STEREO_TRACK   = false;
-    FOCAL_LENGTH   = 460;
+    FOCAL_LENGTH   = 460; // 计算F矩阵的时候会用到
     PUB_THIS_FRAME = false;
 
     if (FREQ == 0)

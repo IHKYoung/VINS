@@ -68,6 +68,13 @@ add_executable(feature_tracker
     )
 target_link_libraries(feature_tracker ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
+add_executable(feature_tracker_rgbd
+    src/feature_tracker/feature_tracker_rgbd_node.cpp
+    src/feature_tracker/feature_parameters.cpp
+    src/feature_tracker/feature_tracker.cpp
+    )
+target_link_libraries(feature_tracker_rgbd ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
 add_executable(pose_graph
     src/pose_graph/pose_graph_node.cpp
     src/pose_graph/pose_graph.cpp
