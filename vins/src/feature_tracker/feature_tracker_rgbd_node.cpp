@@ -71,6 +71,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg, const sensor_msgs::
 
     cv_bridge::CvImageConstPtr img_ptr;
     // 判断图像的编码格式，如果是bgr8，则转换为MONO8
+    // 这里需要区别rgb8和bgr8，opencv默认的图像格式是bgr8
     if (img_msg->encoding == "bgr8")
     {
         // MONO8可以保存一些图像的元数据，比如图像的时间戳、图像的宽高等
@@ -84,7 +85,20 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg, const sensor_msgs::
         img.encoding     = "bgr8";
         img_ptr          = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
     }
-    else if (img_msg->encoding == "mono8")
+    else if (img_msg->encoding == "rgb8")
+    {
+        // MONO8可以保存一些图像的元数据，比如图像的时间戳、图像的宽高等
+        sensor_msgs::Image img;
+        img.header       = img_msg->header;
+        img.height       = img_msg->height;
+        img.width        = img_msg->width;
+        img.is_bigendian = img_msg->is_bigendian; // 是否为大端模式，大端序中，高位字节排在低位字节的前面，十六进制数0x12345678在大端序中的存储方式为12 34 56 78（内存地址增大方向）
+        img.step         = img_msg->step;         // 图像数据的每一行所占用的字节数，即每一行像素数据的内存偏移量
+        img.data         = img_msg->data;         // 指向图像数据的指针， 可以通过对data + i * step + j的访问来访问第i行第j列的像素数据
+        img.encoding     = "rgb8";
+        img_ptr          = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
+    }
+    else if (img_msg->encoding == "mono8" || img_msg->encoding == "8UC1")
     {
         // MONO8可以保存一些图像的元数据，比如图像的时间戳、图像的宽高等
         sensor_msgs::Image img;
@@ -99,14 +113,25 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg, const sensor_msgs::
     }
     else
     {
-        // 其他图片格式直接转换为MONO8
-        // TODO 可能需要考虑其他图片格式的转换
-        img_ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
+        ROS_ERROR("Unknown encoding: %s!!", img_msg->encoding.c_str());
+        return;
     }
 
     // 深度图像的格式应该是mono16的（黑白灰表示深度）
     cv_bridge::CvImageConstPtr depth_ptr;
-    if (img_msg->encoding == "bgr16")
+    if (depth_msg->encoding == "mono16" || depth_msg->encoding == "16UC1")
+    {
+        sensor_msgs::Image img;
+        img.header       = depth_msg->header;
+        img.height       = depth_msg->height;
+        img.width        = depth_msg->width;
+        img.is_bigendian = depth_msg->is_bigendian; // 是否为大端模式，大端序中，高位字节排在低位字节的前面，十六进制数0x12345678在大端序中的存储方式为12 34 56 78（内存地址增大方向）
+        img.step         = depth_msg->step;         // 图像数据的每一行所占用的字节数，即每一行像素数据的内存偏移量
+        img.data         = depth_msg->data;         // 指向图像数据的指针， 可以通过对data + i * step + j的访问来访问第i行第j列的像素数据
+        img.encoding     = "mono16";
+        depth_ptr        = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO16);
+    }
+    else if (depth_msg->encoding == "bgr16")
     {
         sensor_msgs::Image img;
         img.header       = depth_msg->header;
@@ -118,9 +143,8 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg, const sensor_msgs::
         img.encoding     = "bgr16";
         depth_ptr        = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO16);
     }
-    else if (img_msg->encoding == "mono16")
+    else if (depth_msg->encoding == "rgb16")
     {
-        // MONO8可以保存一些图像的元数据，比如图像的时间戳、图像的宽高等
         sensor_msgs::Image img;
         img.header       = depth_msg->header;
         img.height       = depth_msg->height;
@@ -128,13 +152,13 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg, const sensor_msgs::
         img.is_bigendian = depth_msg->is_bigendian; // 是否为大端模式，大端序中，高位字节排在低位字节的前面，十六进制数0x12345678在大端序中的存储方式为12 34 56 78（内存地址增大方向）
         img.step         = depth_msg->step;         // 图像数据的每一行所占用的字节数，即每一行像素数据的内存偏移量
         img.data         = depth_msg->data;         // 指向图像数据的指针， 可以通过对data + i * step + j的访问来访问第i行第j列的像素数据
-        img.encoding     = "mono16";
+        img.encoding     = "rgb16";
         depth_ptr        = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO16);
     }
     else
     {
-        // 其他图片格式直接转换为MONO16
-        depth_ptr = cv_bridge::toCvCopy(depth_msg, sensor_msgs::image_encodings::MONO16);
+        ROS_ERROR("Unknown encoding: %s!!", depth_msg->encoding.c_str());
+        return;
     }
 
     cv::Mat show_img = img_ptr->image;
@@ -233,8 +257,10 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg, const sensor_msgs::
                     velocity_x_of_point.values.push_back(pts_velocity[j].x);
                     velocity_y_of_point.values.push_back(pts_velocity[j].y);
                     // 注意这里的x和y
-                    // show_depth: 480*640  y:[0,480]   x:[0,640]
                     depth_of_point.values.push_back((int)show_depth.at<unsigned short>(round(cur_pts[j].y), round(cur_pts[j].x)));
+#if PRINT_DEBUG
+                    printf("Depth: (%d, %d)\n", round(cur_pts[j].y), round(cur_pts[j].x))
+#endif
                 }
             }
         }
@@ -243,9 +269,10 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg, const sensor_msgs::
         feature_points->channels.push_back(v_of_point);
         feature_points->channels.push_back(velocity_x_of_point);
         feature_points->channels.push_back(velocity_y_of_point);
-        ROS_DEBUG("publish %f, at %f", feature_points->header.stamp.toSec(), ros::Time::now().toSec());
+        feature_points->channels.push_back(depth_of_point);
+        ROS_DEBUG("[feature_tracker] Publish feature point timestamp: %f, at: %f", feature_points->header.stamp.toSec(), ros::Time::now().toSec());
 
-        // skip the first image; since no optical speed on frist image
+        // skip the first image; since no optical speed on first image
         if (!init_pub)
         {
             init_pub = true;
@@ -290,14 +317,14 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg, const sensor_msgs::
                     cv::putText(tmp_img, name, trackerData[i].cur_pts[j], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
                 }
             }
-            // // 同理，指针的作用，所以对tmp_img的操作会同步到stereo_img
-            // cv::imshow("feature tracker", stereo_img);
-            // // 只能有一个waitKey，否则会卡死
-            // cv::waitKey(1);
+            // 同理，指针的作用，所以对tmp_img的操作会同步到stereo_img
+            cv::imshow("feature tracker", stereo_img);
+            // 只能有一个waitKey，否则会卡死
+            cv::waitKey(1);
             pub_match.publish(img_ptr->toImageMsg());
         }
     }
-    ROS_INFO("whole feature tracker processing costs: %f", t_feature_tracker.toc());
+    ROS_INFO("[feature_tracker] Whole feature tracker processing costs: %f", t_feature_tracker.toc());
 }
 
 int main(int argc, char **argv)
@@ -346,6 +373,13 @@ int main(int argc, char **argv)
     // /feature_tracker/restart 会被 /vins_estimator 订阅
     // 发布的实例是restart_flag，重新启动标志位
     pub_restart = nh.advertise<std_msgs::Bool>("restart", 100);
+
+        
+    if (SHOW_TRACK) {
+        cv::namedWindow("feature tracker", cv::WINDOW_NORMAL);
+        cv::resizeWindow("feature tracker", COL, ROW);
+    }
+
 
     ros::spin();
     return 0;

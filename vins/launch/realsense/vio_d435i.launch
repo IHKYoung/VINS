@@ -1,5 +1,5 @@
 <launch>
-    <arg name="config_path" default = "$(find vins)/../config/metoak/vio_u60.yaml" />
+    <arg name="config_path" default = "$(find vins)/../config/realsense/vio_d435i.yaml" />
     <arg name="vins_path" default = "$(find vins)/../" />
 
     <node name="feature_tracker" pkg="vins" type="feature_tracker" output="screen">

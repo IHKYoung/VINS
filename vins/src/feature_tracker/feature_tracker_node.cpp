@@ -199,7 +199,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         feature_points->channels.push_back(v_of_point);
         feature_points->channels.push_back(velocity_x_of_point);
         feature_points->channels.push_back(velocity_y_of_point);
-        ROS_DEBUG("publish %f, at %f", feature_points->header.stamp.toSec(), ros::Time::now().toSec());
+        ROS_DEBUG("[feature_tracker] Publish feature point timestamp: %f, at: %f", feature_points->header.stamp.toSec(), ros::Time::now().toSec());
 
         // skip the first image; since no optical speed on frist image
         if (!init_pub)
@@ -231,10 +231,10 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                     // 显示追踪状态：红色多表示Good（len的值大），BGR颜色空间
                     cv::circle(tmp_img, trackerData[i].cur_pts[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
                     // 绘制特征点的运动轨迹
-                    Vector2d tmp_cur_un_pts(trackerData[i].cur_un_pts[j].x, trackerData[i].cur_un_pts[j].y); // 归一化平面的坐标
+                    Vector2d tmp_cur_un_pts(trackerData[i].cur_un_pts[j].x, trackerData[i].cur_un_pts[j].y);       // 归一化平面的坐标
                     Vector2d tmp_pts_velocity(trackerData[i].pts_velocity[j].x, trackerData[i].pts_velocity[j].y); // 特征点的像素速度
-                    Vector3d tmp_prev_un_pts; // 用于存储特征点的上一帧的归一化平面坐标(x,y,1)
-                    Vector2d tmp_prev_uv; // 用于存储特征点的上一帧的像素坐标
+                    Vector3d tmp_prev_un_pts;                                                                      // 用于存储特征点的上一帧的归一化平面坐标(x,y,1)
+                    Vector2d tmp_prev_uv;                                                                          // 用于存储特征点的上一帧的像素坐标
                     tmp_prev_un_pts.head(2) = tmp_cur_un_pts - 0.10 * tmp_pts_velocity;
                     tmp_prev_un_pts.z()     = 1;
                     trackerData[i].m_camera->spaceToPlane(tmp_prev_un_pts, tmp_prev_uv);
@@ -253,7 +253,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             pub_match.publish(ptr->toImageMsg());
         }
     }
-    ROS_INFO("whole feature tracker processing costs: %f", t_feature_tracker.toc());
+    ROS_INFO("[feature_tracker] Whole feature tracker processing costs: %f", t_feature_tracker.toc());
 }
 
 int main(int argc, char **argv)
@@ -298,6 +298,12 @@ int main(int argc, char **argv)
     // /feature_tracker/restart 会被 /vins_estimator 订阅
     // 发布的实例是restart_flag，重新启动标志位
     pub_restart = nh.advertise<std_msgs::Bool>("restart", 100);
+
+            
+    if (SHOW_TRACK) {
+        cv::namedWindow("feature tracker", cv::WINDOW_NORMAL);
+        cv::resizeWindow("feature tracker", COL, ROW);
+    }
 
     ros::spin();
     return 0;

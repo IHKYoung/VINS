@@ -14,6 +14,7 @@
   <export>
     <node name="vins_estimator" />
     <node name="feature_tracker" />
+    <node name="feature_tracker_rgbd" />
     <node name="pose_graph" />
   </export>
 
