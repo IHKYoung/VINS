@@ -1,5 +1,5 @@
 # :sparkles: Upgrade: VINS-Mono
-:tada: **VINS 诸行代码重写注解版:monocle_face:**
+:tada: **VINS 逐行代码重写注解版:monocle_face:**
 > **Upgrade List:**
 > 1. :art: Merge vins_estimator, feature_tracker, pose_graph into one ros package, named vins.
 > 2. 
