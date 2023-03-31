@@ -49,7 +49,6 @@ class Estimator
     void double2vector();
     bool failureDetection();
 
-
     enum SolverFlag
     {
         INITIAL,

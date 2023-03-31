@@ -22,7 +22,6 @@ Eigen::Vector3d G{0.0, 0.0, 9.8};
 std::string EX_CALIB_RESULT_PATH;
 std::string VINS_RESULT_PATH;
 std::string IMU_TOPIC;
-std::string PROCESS_COST;
 
 
 template <typename T>
@@ -62,11 +61,6 @@ void readParameters(ros::NodeHandle &n)
     fsSettings["output_path"] >> OUTPUT_PATH;
     VINS_RESULT_PATH = OUTPUT_PATH + "/vins_result_no_loop.csv";
     std::cout << "result path " << VINS_RESULT_PATH << std::endl;
-
-    // processImage总耗时
-    PROCESS_COST = OUTPUT_PATH + "/process_cost.csv";
-    std::ofstream fout_process(PROCESS_COST, std::ios::out);
-    fout_process.close();
 
     // create folder if not exists
     FileSystemHelper::createDirectoryIfNotExists(OUTPUT_PATH.c_str());

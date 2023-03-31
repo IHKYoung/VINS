@@ -16,6 +16,7 @@ void Estimator::setParameter()
     f_manager.setRic(ric);
     ProjectionFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
     ProjectionTdFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
+    // 配置中estimate_td对应的td
     td = TD;
 }
 
