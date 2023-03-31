@@ -12,43 +12,55 @@
 #include "utility/estimator_parameters.h"
 #include "utility/visualization.h"
 
-
 Estimator estimator;
 
 std::condition_variable con;
-double current_time = -1;
 queue<sensor_msgs::ImuConstPtr> imu_buf;
 queue<sensor_msgs::PointCloudConstPtr> feature_buf;
 queue<sensor_msgs::PointCloudConstPtr> relo_buf;
-int sum_of_wait = 0;
 
 std::mutex m_buf;
 std::mutex m_state;
 std::mutex i_buf;
 std::mutex m_estimator;
 
-double latest_time;
-Eigen::Vector3d tmp_P;
+/**
+ * @brief IMU 基本参数 [P,Q,V,Ba,Bg,a,g]
+ * P：位置（Position），表示物体在三维空间中的位置坐标，通常以米（m）为单位。
+ * Q：四元数（Quaternion），表示物体在三维空间中的姿态（旋转方向和角度），可以用于将本体坐标系（Body Frame）与惯性坐标系（Inertial Frame）之间的转换。
+ * R：旋转矩阵（Rotation Matrix），表示物体在三维空间中的旋转姿态，可以用于将本体坐标系（Body Frame）与惯性坐标系（Inertial Frame）之间的转换。
+ * V：速度（Velocity），表示物体在三维空间中的速度矢量，通常以米/秒（m/s）为单位。
+ * Ba：加速度计偏置（Accelerometer Bias），表示加速度计读数在静止状态下的偏差误差。
+ * Bg：陀螺仪偏置（Gyroscope Bias），表示陀螺仪读数在静止状态下的偏差误差。
+ * a：线性加速度（Linear Acceleration），表示物体在三个轴向上的加速度，通常以米/秒^2（m/s^2）为单位。
+ * g：角速度（Angular Velocity），表示物体在三个轴向上的角速度，通常以弧度/秒（rad/s）为单位。
+ */
 Eigen::Quaterniond tmp_Q;
+Eigen::Vector3d tmp_P;
 Eigen::Vector3d tmp_V;
 Eigen::Vector3d tmp_Ba;
 Eigen::Vector3d tmp_Bg;
 Eigen::Vector3d acc_0;
 Eigen::Vector3d gyr_0;
-bool init_feature = 0;
-bool init_imu = 1;
-double last_imu_t = 0;
 
+bool init_feature = false;
+bool init_imu     = true;
+double latest_time;
+double last_imu_t   = 0;
+double current_time = -1;
+int sum_of_wait     = 0;
+
+// 从IMU测量值imu_msg和上一个P、Q、V递推得到下一个tmp_P、tmp_Q、tmp_V、中值积分
 void predict(const sensor_msgs::ImuConstPtr &imu_msg)
 {
     double t = imu_msg->header.stamp.toSec();
     if (init_imu)
     {
         latest_time = t;
-        init_imu = 0;
+        init_imu    = false;
         return;
     }
-    double dt = t - latest_time;
+    double dt   = t - latest_time;
     latest_time = t;
 
     double dx = imu_msg->linear_acceleration.x;
@@ -64,7 +76,7 @@ void predict(const sensor_msgs::ImuConstPtr &imu_msg)
     Eigen::Vector3d un_acc_0 = tmp_Q * (acc_0 - tmp_Ba) - estimator.g;
 
     Eigen::Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - tmp_Bg;
-    tmp_Q = tmp_Q * Utility::deltaQ(un_gyr * dt);
+    tmp_Q                  = tmp_Q * Utility::deltaQ(un_gyr * dt);
 
     Eigen::Vector3d un_acc_1 = tmp_Q * (linear_acceleration - tmp_Ba) - estimator.g;
 
@@ -77,22 +89,23 @@ void predict(const sensor_msgs::ImuConstPtr &imu_msg)
     gyr_0 = angular_velocity;
 }
 
+// 从估计器中得到滑动窗口当前图像帧的imu更新项[P,Q,V,ba,bg,a,g]
+// 对imu_buf中剩余的imu_msg进行PQV递推
 void update()
 {
     TicToc t_predict;
     latest_time = current_time;
-    tmp_P = estimator.Ps[WINDOW_SIZE];
-    tmp_Q = estimator.Rs[WINDOW_SIZE];
-    tmp_V = estimator.Vs[WINDOW_SIZE];
-    tmp_Ba = estimator.Bas[WINDOW_SIZE];
-    tmp_Bg = estimator.Bgs[WINDOW_SIZE];
-    acc_0 = estimator.acc_0;
-    gyr_0 = estimator.gyr_0;
+    tmp_P       = estimator.Ps[WINDOW_SIZE];
+    tmp_Q       = estimator.Rs[WINDOW_SIZE];
+    tmp_V       = estimator.Vs[WINDOW_SIZE];
+    tmp_Ba      = estimator.Bas[WINDOW_SIZE];
+    tmp_Bg      = estimator.Bgs[WINDOW_SIZE];
+    acc_0       = estimator.acc_0;
+    gyr_0       = estimator.gyr_0;
 
     queue<sensor_msgs::ImuConstPtr> tmp_imu_buf = imu_buf;
     for (sensor_msgs::ImuConstPtr tmp_imu_msg; !tmp_imu_buf.empty(); tmp_imu_buf.pop())
         predict(tmp_imu_buf.front());
-
 }
 
 std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>>
@@ -155,19 +168,18 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
         std::lock_guard<std::mutex> lg(m_state);
         predict(imu_msg);
         std_msgs::Header header = imu_msg->header;
-        header.frame_id = "world";
+        header.frame_id         = "world";
         if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
             pubLatestOdometry(tmp_P, tmp_Q, tmp_V, header);
     }
 }
-
 
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
 {
     if (!init_feature)
     {
         //skip the first detected feature, which doesn't contain optical flow speed
-        init_feature = 1;
+        init_feature = true;
         return;
     }
     m_buf.lock();
@@ -182,9 +194,9 @@ void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
     {
         ROS_WARN("restart the estimator!");
         m_buf.lock();
-        while(!feature_buf.empty())
+        while (!feature_buf.empty())
             feature_buf.pop();
-        while(!imu_buf.empty())
+        while (!imu_buf.empty())
             imu_buf.pop();
         m_buf.unlock();
         m_estimator.lock();
@@ -192,7 +204,7 @@ void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
         estimator.setParameter();
         m_estimator.unlock();
         current_time = -1;
-        last_imu_t = 0;
+        last_imu_t   = 0;
     }
     return;
 }
@@ -212,10 +224,9 @@ void process()
     {
         std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>> measurements;
         std::unique_lock<std::mutex> lk(m_buf);
-        con.wait(lk, [&]
-                 {
+        con.wait(lk, [&] {
             return (measurements = getMeasurements()).size() != 0;
-                 });
+        });
         lk.unlock();
         m_estimator.lock();
         for (auto &measurement : measurements)
@@ -224,41 +235,40 @@ void process()
             double dx = 0, dy = 0, dz = 0, rx = 0, ry = 0, rz = 0;
             for (auto &imu_msg : measurement.first)
             {
-                double t = imu_msg->header.stamp.toSec();
+                double t     = imu_msg->header.stamp.toSec();
                 double img_t = img_msg->header.stamp.toSec() + estimator.td;
                 if (t <= img_t)
-                { 
+                {
                     if (current_time < 0)
                         current_time = t;
                     double dt = t - current_time;
                     ROS_ASSERT(dt >= 0);
                     current_time = t;
-                    dx = imu_msg->linear_acceleration.x;
-                    dy = imu_msg->linear_acceleration.y;
-                    dz = imu_msg->linear_acceleration.z;
-                    rx = imu_msg->angular_velocity.x;
-                    ry = imu_msg->angular_velocity.y;
-                    rz = imu_msg->angular_velocity.z;
+                    dx           = imu_msg->linear_acceleration.x;
+                    dy           = imu_msg->linear_acceleration.y;
+                    dz           = imu_msg->linear_acceleration.z;
+                    rx           = imu_msg->angular_velocity.x;
+                    ry           = imu_msg->angular_velocity.y;
+                    rz           = imu_msg->angular_velocity.z;
                     estimator.processIMU(dt, Vector3d(dx, dy, dz), Vector3d(rx, ry, rz));
                     //printf("imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
-
                 }
                 else
                 {
-                    double dt_1 = img_t - current_time;
-                    double dt_2 = t - img_t;
+                    double dt_1  = img_t - current_time;
+                    double dt_2  = t - img_t;
                     current_time = img_t;
                     ROS_ASSERT(dt_1 >= 0);
                     ROS_ASSERT(dt_2 >= 0);
                     ROS_ASSERT(dt_1 + dt_2 > 0);
                     double w1 = dt_2 / (dt_1 + dt_2);
                     double w2 = dt_1 / (dt_1 + dt_2);
-                    dx = w1 * dx + w2 * imu_msg->linear_acceleration.x;
-                    dy = w1 * dy + w2 * imu_msg->linear_acceleration.y;
-                    dz = w1 * dz + w2 * imu_msg->linear_acceleration.z;
-                    rx = w1 * rx + w2 * imu_msg->angular_velocity.x;
-                    ry = w1 * ry + w2 * imu_msg->angular_velocity.y;
-                    rz = w1 * rz + w2 * imu_msg->angular_velocity.z;
+                    dx        = w1 * dx + w2 * imu_msg->linear_acceleration.x;
+                    dy        = w1 * dy + w2 * imu_msg->linear_acceleration.y;
+                    dz        = w1 * dz + w2 * imu_msg->linear_acceleration.z;
+                    rx        = w1 * rx + w2 * imu_msg->angular_velocity.x;
+                    ry        = w1 * ry + w2 * imu_msg->angular_velocity.y;
+                    rz        = w1 * rz + w2 * imu_msg->angular_velocity.z;
                     estimator.processIMU(dt_1, Vector3d(dx, dy, dz), Vector3d(rx, ry, rz));
                     //printf("dimu: dt:%f a: %f %f %f w: %f %f %f\n",dt_1, dx, dy, dz, rx, ry, rz);
                 }
@@ -296,20 +306,20 @@ void process()
             map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> image;
             for (unsigned int i = 0; i < img_msg->points.size(); i++)
             {
-                int v = img_msg->channels[0].values[i] + 0.5;
-                int feature_id = v / NUM_OF_CAM;
-                int camera_id = v % NUM_OF_CAM;
-                double x = img_msg->points[i].x;
-                double y = img_msg->points[i].y;
-                double z = img_msg->points[i].z;
-                double p_u = img_msg->channels[1].values[i];
-                double p_v = img_msg->channels[2].values[i];
+                int v             = img_msg->channels[0].values[i] + 0.5;
+                int feature_id    = v / NUM_OF_CAM;
+                int camera_id     = v % NUM_OF_CAM;
+                double x          = img_msg->points[i].x;
+                double y          = img_msg->points[i].y;
+                double z          = img_msg->points[i].z;
+                double p_u        = img_msg->channels[1].values[i];
+                double p_v        = img_msg->channels[2].values[i];
                 double velocity_x = img_msg->channels[3].values[i];
                 double velocity_y = img_msg->channels[4].values[i];
                 ROS_ASSERT(z == 1);
                 Eigen::Matrix<double, 7, 1> xyz_uv_velocity;
                 xyz_uv_velocity << x, y, z, p_u, p_v, velocity_x, velocity_y;
-                image[feature_id].emplace_back(camera_id,  xyz_uv_velocity);
+                image[feature_id].emplace_back(camera_id, xyz_uv_velocity);
             }
             TicToc t_processImage;
             estimator.processImage(image, img_msg->header);
@@ -323,7 +333,7 @@ void process()
 
             printStatistics(estimator, whole_t);
             std_msgs::Header header = img_msg->header;
-            header.frame_id = "world";
+            header.frame_id         = "world";
 
             pubOdometry(estimator, header);
             pubKeyPoses(estimator, header);
@@ -348,22 +358,33 @@ void process()
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "vins_estimator");
-    ros::NodeHandle n("~");
+    ros::NodeHandle nh("~");
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
-    readParameters(n);
+    readParameters(nh);
     estimator.setParameter();
+/**
+ * @brief EIGEN_DONT_PARALLELIZE
+ * Eigen库在默认情况下会自动利用多线程来加速矩阵计算等线性代数操作，这对于大规模数据的处理是非常有用的。
+ * 但是，在一些特定的场景下，如单线程环境或某些平台上，多线程操作可能会影响程序的正确性和性能。
+ * 
+ * Eigen库提供了EIGEN_DONT_PARALLELIZE和EIGEN_HAS_OPENMP两个宏定义，前者用于禁用Eigen库的多线程功能，后者用于启用OpenMP支持。
+ * 如果用户需要使用OpenMP支持，可以在编译程序时定义EIGEN_HAS_OPENMP宏，从而开启OpenMP多线程支持。当然
+ */
 #ifdef EIGEN_DONT_PARALLELIZE
-    ROS_DEBUG("EIGEN_DONT_PARALLELIZE");
+    ROS_DEBUG("[estimator] EIGEN_DONT_PARALLELIZE");
 #endif
-    ROS_WARN("waiting for image and imu...");
+    ROS_WARN("[estimator] Waiting for image and imu...");
 
-    registerPub(n);
+    registerPub(nh);
 
-    ros::Subscriber sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
-    ros::Subscriber sub_image = n.subscribe("/feature_tracker/feature", 2000, feature_callback);
-    ros::Subscriber sub_restart = n.subscribe("/feature_tracker/restart", 2000, restart_callback);
-    ros::Subscriber sub_relo_points = n.subscribe("/pose_graph/match_points", 2000, relocalization_callback);
+    ros::Subscriber sub_imu = nh.subscribe(IMU_TOPIC, 200, imu_callback, ros::TransportHints().tcpNoDelay());
+    // 需要feature_tracker节点发布的feature话题
+    ros::Subscriber sub_image   = nh.subscribe("/feature_tracker/feature", 100, feature_callback);
+    ros::Subscriber sub_restart = nh.subscribe("/feature_tracker/restart", 100, restart_callback);
+    // 重定位，需要pose_graph节点发布的match_points话题
+    ros::Subscriber sub_relo_points = nh.subscribe("/pose_graph/match_points", 100, relocalization_callback);
 
+    // 创建VIO主线程
     std::thread measurement_process{process};
     ros::spin();
 

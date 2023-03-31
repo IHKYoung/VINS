@@ -190,7 +190,7 @@ VectorXd FeatureManager::getDepthVector()
         it_per_id.used_num = it_per_id.feature_per_frame.size();
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
             continue;
-#if 1
+#if ALPHA_TEST
         dep_vec(++feature_index) = 1. / it_per_id.estimated_depth;
 #else
         dep_vec(++feature_index) = it_per_id->estimated_depth;

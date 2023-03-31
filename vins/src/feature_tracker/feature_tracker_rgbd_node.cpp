@@ -332,7 +332,7 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "feature_tracker_rgbd");
     ros::NodeHandle nh("~");
     // Debug, Info, Warn, Error, Fatal
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Warn);
     readParameters(nh);
 
     for (int i = 0; i < NUM_OF_CAM; i++)

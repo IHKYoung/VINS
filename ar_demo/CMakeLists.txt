@@ -3,7 +3,7 @@ project(ar_demo)
 
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-std=c++11 -DEIGEN_DONT_PARALLELIZE")
-#-DEIGEN_USE_MKL_ALL")
+#-DEIGEN_USE_MKL_ALL") # 不使用MKL加速
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 
 find_package(catkin REQUIRED COMPONENTS

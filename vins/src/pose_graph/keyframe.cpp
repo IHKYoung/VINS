@@ -413,7 +413,7 @@ bool KeyFrame::findConnection(KeyFrame* old_kf)
 	    reduceVector(matched_2d_old_norm, status);
 	    reduceVector(matched_3d, status);
 	    reduceVector(matched_id, status);
-	    #if 1
+	    #if ALPHA_TEST
 	    	if (DEBUG_IMAGE)
 	        {
 	        	int gap = 10;

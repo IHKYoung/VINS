@@ -3,9 +3,13 @@ project(vins)
 
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-std=c++11")
+# -DEIGEN_DONT_PARALLELIZE") # 不使用Eigen的并行化功能
+# -DEIGEN_HAS_OPENMP") # 使用Eigen的并行化功能
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 
 add_compile_definitions(PRINT_DEBUG=0)
+add_compile_definitions(UNIT_SPHERE_ERROR=0) # 因子图优化中，是否使用单位球误差
+add_compile_definitions(ALPHA_TEST=1)        # 代码测试时使用
 
 find_package(catkin REQUIRED COMPONENTS
     roscpp

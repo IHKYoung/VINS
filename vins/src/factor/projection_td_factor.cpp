@@ -18,7 +18,7 @@ ProjectionTdFactor::ProjectionTdFactor(const Eigen::Vector3d &_pts_i, const Eige
     row_i = _row_i - ROW / 2;
     row_j = _row_j - ROW / 2;
 
-#ifdef UNIT_SPHERE_ERROR
+#if UNIT_SPHERE_ERROR
     Eigen::Vector3d b1, b2;
     Eigen::Vector3d a = pts_j.normalized();
     Eigen::Vector3d tmp(0, 0, 1);
@@ -57,7 +57,7 @@ bool ProjectionTdFactor::Evaluate(double const *const *parameters, double *resid
     Eigen::Vector3d pts_camera_j = qic.inverse() * (pts_imu_j - tic);
     Eigen::Map<Eigen::Vector2d> residual(residuals);
 
-#ifdef UNIT_SPHERE_ERROR 
+#if UNIT_SPHERE_ERROR 
     residual =  tangent_base * (pts_camera_j.normalized() - pts_j_td.normalized());
 #else
     double dep_j = pts_camera_j.z();
@@ -72,7 +72,7 @@ bool ProjectionTdFactor::Evaluate(double const *const *parameters, double *resid
         Eigen::Matrix3d Rj = Qj.toRotationMatrix();
         Eigen::Matrix3d ric = qic.toRotationMatrix();
         Eigen::Matrix<double, 2, 3> reduce(2, 3);
-#ifdef UNIT_SPHERE_ERROR
+#if UNIT_SPHERE_ERROR
         double norm = pts_camera_j.norm();
         Eigen::Matrix3d norm_jaco;
         double x1, x2, x3;
@@ -188,7 +188,7 @@ void ProjectionTdFactor::check(double **parameters)
     Eigen::Vector3d pts_camera_j = qic.inverse() * (pts_imu_j - tic);
     Eigen::Vector2d residual;
 
-#ifdef UNIT_SPHERE_ERROR 
+#if UNIT_SPHERE_ERROR 
     residual =  tangent_base * (pts_camera_j.normalized() - pts_j_td.normalized());
 #else
     double dep_j = pts_camera_j.z();
@@ -245,7 +245,7 @@ void ProjectionTdFactor::check(double **parameters)
         Eigen::Vector3d pts_camera_j = qic.inverse() * (pts_imu_j - tic);
         Eigen::Vector2d tmp_residual;
 
-#ifdef UNIT_SPHERE_ERROR 
+#if UNIT_SPHERE_ERROR 
         tmp_residual =  tangent_base * (pts_camera_j.normalized() - pts_j_td.normalized());
 #else
         double dep_j = pts_camera_j.z();
