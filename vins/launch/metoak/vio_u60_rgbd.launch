@@ -7,4 +7,8 @@
         <param name="vins_folder" type="string" value="$(arg vins_path)" />
     </node>
 
+    <node name="vins_estimator_rgbd" pkg="vins" type="vins_estimator_rgbd" output="screen">
+        <param name="config_file" type="string" value="$(arg config_path)" />
+        <param name="vins_folder" type="string" value="$(arg vins_path)" />
+     </node>
 </launch>

@@ -65,6 +65,25 @@ add_executable(vins_estimator
     )
 target_link_libraries(vins_estimator ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES}) 
 
+# add_executable(vins_estimator_rgbd
+#     src/estimator/estimator_rgbd_node.cpp
+#     src/estimator/estimator.cpp
+#     src/feature_manager/feature_manager.cpp
+#     src/factor/pose_local_parameterization.cpp
+#     src/factor/projection_factor.cpp
+#     src/factor/projection_td_factor.cpp
+#     src/factor/marginalization_factor.cpp
+#     src/utility/estimator_parameters.cpp
+#     src/utility/utility.cpp
+#     src/utility/visualization.cpp
+#     src/utility/CameraPoseVisualization.cpp
+#     src/initial/solve_5pts.cpp
+#     src/initial/initial_aligment.cpp
+#     src/initial/initial_sfm.cpp
+#     src/initial/initial_ex_rotation.cpp
+#     )
+# target_link_libraries(vins_estimator_rgbd ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES}) 
+
 add_executable(feature_tracker
     src/feature_tracker/feature_tracker_node.cpp
     src/feature_tracker/feature_parameters.cpp

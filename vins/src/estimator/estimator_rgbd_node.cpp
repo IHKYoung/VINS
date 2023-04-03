@@ -186,8 +186,8 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 
     last_imu_t = imu_msg->header.stamp.toSec();
 
+    // 这里就是一个互斥锁，std::lock_guard<std::mutex>会自动解锁（析构时解锁）
     {
-        // 这里就是一个互斥锁，std::lock_guard<std::mutex>会自动解锁（析构时解锁）
         std::lock_guard<std::mutex> lg(m_state);
         predict(imu_msg);
         std_msgs::Header header = imu_msg->header;
@@ -372,10 +372,14 @@ void process()
                 double p_v        = img_msg->channels[2].values[i];
                 double velocity_x = img_msg->channels[3].values[i];
                 double velocity_y = img_msg->channels[4].values[i];
+                double depth      = img_msg->channels[5].values[i] / 1000.0;
+
                 ROS_ASSERT(z == 1);
-                Eigen::Matrix<double, 7, 1> xyz_uv_velocity;
-                xyz_uv_velocity << x, y, z, p_u, p_v, velocity_x, velocity_y;
-                image[feature_id].emplace_back(camera_id, xyz_uv_velocity);
+                // RGBD模式（现在使用单独的node来区分）
+                // TODO 可以直接通过配置文件来选择RGBD模式
+                Eigen::Matrix<double, 8, 1> xyz_uv_velocity_depth;
+                xyz_uv_velocity_depth << x, y, z, p_u, p_v, velocity_x, velocity_y, depth;
+                image[feature_id].emplace_back(camera_id, xyz_uv_velocity_depth);
             }
             // 处理图像特征
             estimator.processImage(image, img_msg->header);
@@ -428,7 +432,7 @@ int main(int argc, char **argv)
 #ifdef EIGEN_DONT_PARALLELIZE
     ROS_DEBUG("[estimator] EIGEN_DONT_PARALLELIZE");
 #endif
-    ROS_WARN("[estimator] Waiting for image and imu...");
+    ROS_WARN("[estimator] Waiting for image(rgbd) and imu...");
 
     registerPub(nh);
 
