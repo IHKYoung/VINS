@@ -303,7 +303,7 @@ void process()
                     rz           = imu_msg->angular_velocity.z;
                     // 进行预积分
                     estimator.processIMU(dt, Vector3d(dx, dy, dz), Vector3d(rx, ry, rz));
-#if DEBUG_PRINT
+#if PRINT_DEBUG
                     printf("IMU dt: %f; linear: (%f,%f,%f) angular: (%f,%f,%f)\n", dt, dx, dy, dz, rx, ry, rz);
 #endif
                 }
@@ -323,7 +323,7 @@ void process()
                     ry        = w1 * ry + w2 * imu_msg->angular_velocity.y;
                     rz        = w1 * rz + w2 * imu_msg->angular_velocity.z;
                     estimator.processIMU(dt_1, Vector3d(dx, dy, dz), Vector3d(rx, ry, rz));
-#if DEBUG_PRINT
+#if PRINT_DEBUG
                     printf("IMU dt: %f; linear: (%f,%f,%f) angular: (%f,%f,%f)\n", dt, dx, dy, dz, rx, ry, rz);
 #endif
                 }
