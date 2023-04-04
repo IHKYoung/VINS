@@ -984,6 +984,8 @@ void Estimator::optimization()
     // 防止优化结果在零空间变化，通过固定第一帧的位姿
     double2vector();
 
+    // 边缘化处理
+    // 如果次新帧是关键帧，将边缘化最老帧，及其看到的路标点和IMU数据，将其转化为先验：
     TicToc t_whole_marginalization;
     if (marginalization_flag == MARGIN_OLD)
     {
