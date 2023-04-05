@@ -36,10 +36,10 @@ AllowShortCaseLabelsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: None
 
 # 允许短的if语句保持在同一行
-AllowShortIfStatementsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: false
 
 # 允许短的循环保持在同一行
-AllowShortLoopsOnASingleLine: true
+AllowShortLoopsOnASingleLine: false
 
 # 总是在返回类型后换行: None, All, TopLevel(顶级函数，不包括在类中的函数), 
 # AllDefinitions(所有的定义，不包括声明), TopLevelDefinitions(所有的顶级函数的定义)
@@ -64,7 +64,7 @@ BraceWrapping:
   # 控制语句后面
   AfterControlStatement: true
   # enum定义后面
-  AfterEnum: false
+  AfterEnum: true
   # 函数定义后面
   AfterFunction: true
   # 命名空间定义后面
@@ -108,7 +108,7 @@ BreakConstructorInitializers: AfterColon
 BreakStringLiterals: false
 
 # 每行字符的限制，0表示没有限制
-ColumnLimit: 0
+ColumnLimit: 140
 
 CompactNamespaces: true
 
