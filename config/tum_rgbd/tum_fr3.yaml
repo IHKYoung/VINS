@@ -9,7 +9,7 @@ num_threads: 0  # 0  Use the max number of threads of your device.
 imu: 0
 image_topic: "/camera/rgb/image_color"
 depth_topic: "/camera/depth/image"
-output_path: "/home/nrosliu/DynamicVINS-Atlas/src/Dynamic_VINS/output"
+output_path: "/home/young/rgbd_ws/output"
 
 #RGBD camera Ideal Range
 depth_min_dist: 0.4
@@ -83,12 +83,9 @@ rolling_shutter_tr: 0.0               # unit: s. rolling shutter read out time p
 loop_closure: 0                    # start loop closure
 fast_relocalization: 0             # useful in real-time and large project
 load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
-pose_graph_save_path: "/home/nrosliu/DynamicVINS-Atlas/src/Dynamic_VINS/output/pose_graph" # save and load path
+pose_graph_save_path: "/home/young/rgbd_ws/output" # save and load path
 
 #visualization parameters
 save_image: 0                   # save image in pose graph for visualization prupose; you can close this function by setting 0
 visualize_imu_forward: 0        # output imu forward propogation to achieve low latency and high frequence results
 visualize_camera_size: 0.4      # size of camera marker in RVIZ
-
-#暂时仅考虑动物
-dynamic_label: ["person", "cat", "dog", "bicycle", "car","bus"]

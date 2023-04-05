@@ -9,7 +9,7 @@ num_threads: 6  # 0  Use the max number of threads of your device.
 imu: 0
 image_topic: "/decompressed_img"
 depth_topic: "/camera/depth/image"
-output_path: "/home/HwHiAiUser/Dynamic_VINS_ws/src/Dynamic_VINS/output"
+output_path: "/home/young/rgbd_ws/output"
 
 #RGBD camera Ideal Range
 depth_min_dist: 0.4
@@ -59,7 +59,7 @@ extrinsicTranslation: !!opencv-matrix
    data: [0.0203127935529, -0.00510325236246, -0.0112013882026]
 
 #feature traker paprameters
-max_cnt: 200           # max feature number in feature tracking. 
+max_cnt: 200            # max feature number in feature tracking. 
 min_dist: 20            # min distance between two features
 F_threshold: 1.0        # ransac threshold (pixel)
 show_track: 0           # publish tracking image as topic
@@ -67,13 +67,13 @@ equalize: 0             # if image is too dark or light, trun on equalize to fin
 fisheye: 0              # if using fisheye, trun on it. A circle mask will be loaded to remove edge noisy points
 
 #optimization parameters
-max_solver_time: 0.04  # max solver itration time (ms), to guarantee real time
+max_solver_time: 0.04   # max solver itration time (ms), to guarantee real time
 max_num_iterations: 8   # max solver itrations, to guarantee real time
 
-g_norm: 9.805       # gravity magnitude
+g_norm: 9.805           # gravity magnitude
 
 #unsynchronization parameters
-estimate_td: 0    ##########                  # online estimate time offset between camera and imu
+estimate_td: 0                      # online estimate time offset between camera and imu
 td: 0.000                           # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
 
 #rolling shutter parameters
@@ -84,12 +84,9 @@ rolling_shutter_tr: 0.0               # unit: s. rolling shutter read out time p
 loop_closure: 0                    # start loop closure
 fast_relocalization: 0             # useful in real-time and large project
 load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
-pose_graph_save_path: "/home/nrosliu/DynamicVINS-Atlas/src/Dynamic_VINS/output/pose_graph" # save and load path
+pose_graph_save_path: "/home/young/rgbd_ws/output" # save and load path
 
 #visualization parameters
 save_image: 0                   # save image in pose graph for visualization prupose; you can close this function by setting 0
 visualize_imu_forward: 0        # output imu forward propogation to achieve low latency and high frequence results
 visualize_camera_size: 0.4      # size of camera marker in RVIZ
-
-#暂时仅考虑动物
-dynamic_label: ["person", "cat", "dog", "bicycle", "car","bus"]

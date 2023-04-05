@@ -178,10 +178,10 @@ private:
         }
         pubTrackImg(vis_img);
 
-        // 基于网格的特征点提取
-        cv::imshow("grids_detector_img", estimator.featureTracker.grids_detector_img);
-        cv::imshow("feature_img", vis_img);
-        cv::waitKey(1);
+        // // 基于网格的特征点提取
+        // cv::imshow("grids_detector_img", estimator.featureTracker.grids_detector_img);
+        // cv::imshow("feature_img", vis_img);
+        // cv::waitKey(1);
     }
 
     // thread: feature tracker

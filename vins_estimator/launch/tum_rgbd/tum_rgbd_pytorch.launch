@@ -2,10 +2,6 @@
     <arg name="config_path" default="$(find vins_estimator)/../config/tum_rgbd/tum_fr3.yaml" />
     <arg name="vins_path" default="$(find vins_estimator)/../config/../" />
 
-    <!-- <remap from="/camera/color/image_raw" to="/camera/rgb/image_color" />
-    <include file="$(find yolo_ros)/launch/yolo_service.launch">
-    </include> -->
-
     <arg name="manager_name" default="nodelet_manager_pc" />
     <node pkg="nodelet" type="nodelet" name="$(arg manager_name)" args="manager" output="screen" />
 
